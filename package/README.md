@@ -30,6 +30,8 @@ On non-coding tasks the savings were smaller: âˆ’28% on a security review and âˆ
 
 ## How it works
 
+Cutting tokens alone barely moves usage: most of a session's tokens are context re-read from cache, which costs 5â€“10% of a fresh token. What costs is which model does the work, so that is where Fewr saves.
+
 - **Your model leads.** At the start of a session, Fewr tells your model it is the lead. It keeps architecture, design-heavy work, security judgement and creative direction, and hands the rest to a worker.
 - **The right model and effort for each subtask:**
 
@@ -46,7 +48,17 @@ On non-coding tasks the savings were smaller: âˆ’28% on a security review and âˆ
 
 ## See your savings
 
-In any chat, run `/fewrstats` in Claude Code or `$fewrstats` in Codex:
+In any chat, run this in Claude Code:
+
+```text
+/fewrstats
+```
+
+Or this in Codex:
+
+```text
+$fewrstats
+```
 
 <p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/stats.png" width="880" alt="/fewrstats: this chat's raw tokens, cost and build time with Fewr, next to an estimate without it."></p>
 

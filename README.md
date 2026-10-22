@@ -35,7 +35,10 @@
    npx fewr
    ```
 2. Start a new chat. Fewr loads when a chat starts, so chats already open keep running without it.
-3. Type `/fewrstats` in any chat to see your savings.
+3. Type this in any chat to see your savings:
+   ```text
+   /fewrstats
+   ```
 
 ### Codex
 
@@ -45,7 +48,10 @@
    ```
 2. In Codex, type `/hooks`. Find **Fewr: SessionStart** and **Fewr: record usage**, and trust both. Codex keeps new hooks off until you do.
 3. Start a new chat.
-4. Type `$fewrstats` in any chat to see your savings.
+4. Type this in any chat to see your savings:
+   ```text
+   $fewrstats
+   ```
 
 To remove Fewr: `npx fewr uninstall`.
 
@@ -73,10 +79,12 @@ Most ways to save usage give up some quality to get there:
 |---|---|---|
 | A cheaper model | Runs the whole session on Sonnet or a mini model | The hard parts (architecture, design, security) get the weaker model too |
 | Lower effort | Thinks less on every turn | Less thinking on exactly the turns that need it |
-| Trimming and compression | Shortens prompts, context or replies | Saved 0–11% in our tests, and rules about *how* to work made models think more, not less |
+| Trimming and compression | Shortens prompts, context or replies | Mostly cuts cached context, which is already cheap. Saved 0–11% in our tests, and rules about *how* to work made models think more, not less |
 | Proxies and routers | Re-route your subscription's traffic | Breaks Anthropic's and OpenAI's terms and puts your account at risk |
 
-Fewr doesn't turn anything down across the board. It splits the work:
+**Fewer tokens isn't less usage.** In a coding session, most tokens are the same context re-read from cache on every turn, and a cached token costs 5–10% of a fresh one. Cutting them shrinks the token count much more than the bill. What really costs is which model does the work: Haiku and Luna cost 40–100× less per token than Opus and GPT-6 Astra.
+
+Fewr saves there. It doesn't turn anything down across the board; it splits the work:
 
 <p align="center">
   <img src="assets/how-it-works.jpg" width="880" alt="One task split into subtasks: lookups and log summaries to Haiku or Luna at low effort, small changes to Sonnet or Sol at low, logic and tests at medium, tricky logic at high, and design on your own model at your own effort. 5 of 6 steps on cheaper models.">
