@@ -14,8 +14,6 @@ npx fewr
 
 Requires Node.js 22+ and a signed-in Claude Code or Codex. In Codex, open `/hooks` once and trust the new Fewr hooks.
 
-Fewr is free and open source. **[Follow @flojousselin on X](https://x.com/flojousselin)** for new benchmark results, releases and tips for getting more out of Claude Code and Codex.
-
 ## Results
 
 <p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/chart.png" width="880" alt="Cost with Fewr, same model and same effort: 3D game −51% on Codex and −43% on Claude Code, website + API −38%, security review −28%, presentation video −25%, simple 2D game −19%."></p>
@@ -92,11 +90,7 @@ If the previous version, Shyft, is installed, uninstall it first; Fewr refuses t
 
 ## Follow along
 
-Fewr is built in public, and every result is published. [Follow @flojousselin on X](https://x.com/flojousselin) to get:
-
-- **New benchmark results** as they come in, with the side-by-side builds;
-- **Releases**: new mechanisms and support for more tasks;
-- **Practical tips** for stretching your Claude Code and Codex plans.
+<p align="center"><a href="https://x.com/flojousselin"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/follow.png" width="880" alt="Fewr is free. Follow along for what's next: new benchmark results, releases and tips for Claude Code and Codex. @flojousselin on X."></a></p>
 
 Paying for API tokens instead of a subscription? A cost-optimizing mode for API users is next. [DM @flojousselin](https://x.com/flojousselin) to try it early.
 

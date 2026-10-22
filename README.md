@@ -93,8 +93,6 @@ Fewr doesn't turn anything down across the board. It splits the work:
   <a href="https://x.com/flojousselin"><img src="assets/follow.png" width="880" alt="Fewr is free. Follow along for what's next: new benchmark results, releases and tips for Claude Code and Codex. @flojousselin on X."></a>
 </p>
 
-Fewr is free and built in public. [Follow @flojousselin on X](https://x.com/flojousselin) for new benchmark results, releases and practical tips for Claude Code and Codex.
-
 ## License
 
 [AGPL-3.0](LICENSE). Free to use, modify and share. If you distribute a modified version, or offer one as a network service, you must publish its source under the same license. The Fewr name, logo and website content are not covered; see [NOTICE](NOTICE). © 2026 Florian Jousselin.
