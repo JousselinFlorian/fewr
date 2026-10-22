@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.tgz
+.shyft/
+.DS_Store
+archive/**/node_modules/
+archive/**/dist/
+archive/**/test-results/
+archive/**/*.vsix
+benchmarks/legacy/benchmarks/runs/
+
+# Internal notes kept off GitHub
+private/
+
+# Benchmarks stay local
+benchmarks/

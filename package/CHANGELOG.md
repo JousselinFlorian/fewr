@@ -1,0 +1,10 @@
+# Changelog
+
+## 0.1.0 (2026-10-22)
+
+First public release, under the AGPL-3.0 license.
+
+- Orchestrator mode for Claude Code and Codex: your model leads and hands legwork to cheaper models at a chosen effort; design, architecture and security judgement stay with your model.
+- Tool-output compaction and re-read deduplication (Claude Code).
+- `/fewrstats` (Claude Code) and `$fewrstats` (Codex): this chat's raw tokens, cost and build time, with a conservative cost estimate without Fewr.
+- `fewr usage`: price-weighted usage of any session, including its workers.
