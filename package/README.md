@@ -51,26 +51,26 @@ Cutting tokens alone barely moves usage: most of a session's tokens are context 
 In any chat, run this in Claude Code:
 
 ```text
-/fewrstats
+/fewr
 ```
 
 Or this in Codex:
 
 ```text
-$fewrstats
+$fewr
 ```
 
-<p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/stats.png" width="880" alt="/fewrstats: this chat's raw tokens, cost and build time with Fewr, next to an estimate without it."></p>
+<p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/stats.png" width="880" alt="/fewr: this chat's raw tokens, cost and build time with Fewr, next to an estimate without it."></p>
 
 ```
 | | Without Fewr | With Fewr | Change |
 | :-- | --: | --: | --: |
-| Raw tokens | — | 4,070,377 | — |
-| Cost | $5.12 (est.) | $3.98 | −22.4% |
-| Build time | — | 22 min | — |
+| Raw tokens | 3,188,785 (est.) | 2,076,370 | −34.9% |
+| Cost | $1.23 (est.) | $1.12 | −8.9% |
+| Build time | 21 min (est.) | 22 min | +2.9% |
 ```
 
-"With Fewr" is the chat's real usage, workers included, at published prices. A chat has no measured run without Fewr, so that cost is a conservative estimate: the lower of two models of the same work done by your model alone. In benchmarks, it stayed under the real cost without Fewr on 5 of 6 tasks. Raw tokens and build time have no reliable per-chat estimate without Fewr, so they show this chat's figures only.
+"With Fewr" is the chat's real usage, workers included, at published prices. A chat has no measured run without Fewr, so "Without Fewr" is an estimate: your model doing the workers' jobs inside its own context, plus the tool output Fewr kept out of it. Cost is the lower of that and this chat's tokens priced at your model's rates, so it stays conservative; in benchmarks, it stayed under the real cost without Fewr on 5 of 6 tasks. Build time counts the workers' writing at your model's pace, one task after another. None of the estimates count the extra thinking your effort level would add.
 
 From a terminal:
 
@@ -82,7 +82,7 @@ fewr usage claude ~/.claude/projects/<project>/<session>.jsonl  # one session's 
 ## Privacy and safety
 
 - Everything runs on your machine. Fewr has no server, and sends no telemetry or code anywhere.
-- It installs only native hooks, agent definitions and the `fewrstats` skill. Your other settings are kept, modified files are backed up under `~/.fewr/backups/`, and files you've edited are never overwritten.
+- It installs only native hooks, agent definitions and the `fewr` skill. Your other settings are kept, modified files are backed up under `~/.fewr/backups/`, and files you've edited are never overwritten.
 - It never touches your login or tokens.
 
 ## Configure and uninstall

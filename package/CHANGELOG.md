@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The stats skill is renamed: `/fewrstats` is now `/fewr`, `$fewrstats` is now `$fewr`. Reinstalling removes the old skill.
+- The stats report drops its footnote and leaves a blank line above and below the table; the README explains the estimate instead.
+
 ## 0.1.0 (2026-10-22)
 
 First public release, under the AGPL-3.0 license.

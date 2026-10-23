@@ -183,7 +183,7 @@ test('after compaction a facts-only digest restores changed files and recent req
   assert.match(handleHook('claude', { hook_event_name: 'SessionStart', source: 'compact', session_id: 'd1' }, home, {}).hookSpecificOutput.additionalContext, /orchestrator mode/, 'the brief survives compaction');
 });
 
-test('fewrstats reports this chat with Fewr and a conservative cost estimate without it', t => {
+test('fewr stats reports this chat with Fewr and a conservative cost estimate without it', t => {
   const home = tmp(t), projects = path.join(home, '.claude', 'projects'), cwd = '/work/my.app';
   const dir = path.join(projects, '-work-my-app');
   fs.mkdirSync(path.join(dir, 's1', 'subagents'), { recursive: true });

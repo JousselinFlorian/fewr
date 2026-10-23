@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { install, uninstall } from '../src/install.mjs';
+import { hash } from '../src/store.mjs';
 
 function setup(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fewr2-install-'));
@@ -30,23 +31,23 @@ test('install adds only hooks, preserves unrelated settings, and is idempotent',
   install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env });
   assert.equal(fs.readFileSync(s.claude, 'utf8'), first, 'reinstall changes nothing');
   assert.deepEqual(fs.readdirSync(path.join(s.userHome, '.claude', 'agents')).sort(), ['fewr-worker.md'], 'only the worker agent');
-  assert.deepEqual(fs.readdirSync(path.join(s.userHome, '.claude', 'skills')), ['fewrstats'], 'only the stats skill');
+  assert.deepEqual(fs.readdirSync(path.join(s.userHome, '.claude', 'skills')), ['fewr'], 'only the stats skill');
 });
 
-test('fewrstats is installed as a chat command on both clients and removed on uninstall', t => {
+test('the fewr skill is installed as a chat command on both clients and removed on uninstall', t => {
   const s = setup(t);
   install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env });
-  const claude = fs.readFileSync(path.join(s.userHome, '.claude/skills/fewrstats/SKILL.md'), 'utf8');
-  assert.match(claude, /^---\nname: fewrstats\n[\s\S]*disable-model-invocation: true\n---/);
+  const claude = fs.readFileSync(path.join(s.userHome, '.claude/skills/fewr/SKILL.md'), 'utf8');
+  assert.match(claude, /^---\nname: fewr\n[\s\S]*disable-model-invocation: true\n---/);
   assert.match(claude, /bin\/fewr\.mjs' stats --client claude --session '\$\{CLAUDE_SESSION_ID\}' --cwd "\$PWD"/);
-  const codex = fs.readFileSync(path.join(s.userHome, '.agents/skills/fewrstats/SKILL.md'), 'utf8');
+  const codex = fs.readFileSync(path.join(s.userHome, '.agents/skills/fewr/SKILL.md'), 'utf8');
   assert.match(codex, /stats --client codex --cwd "\$PWD"/);
-  assert.match(fs.readFileSync(path.join(s.userHome, '.agents/skills/fewrstats/agents/openai.yaml'), 'utf8'), /allow_implicit_invocation: false/);
+  assert.match(fs.readFileSync(path.join(s.userHome, '.agents/skills/fewr/agents/openai.yaml'), 'utf8'), /allow_implicit_invocation: false/);
   const runtime = JSON.parse(fs.readFileSync(path.join(s.home, 'installation.json'), 'utf8')).clients.claude.runtime;
   assert.ok(fs.existsSync(path.join(runtime, 'bin', 'fewr.mjs')), 'skills point at the installed runtime');
   uninstall({ clients: ['claude', 'codex'], home: s.home });
-  assert.equal(fs.existsSync(path.join(s.userHome, '.claude/skills/fewrstats')), false);
-  assert.equal(fs.existsSync(path.join(s.userHome, '.agents/skills/fewrstats')), false);
+  assert.equal(fs.existsSync(path.join(s.userHome, '.claude/skills/fewr')), false);
+  assert.equal(fs.existsSync(path.join(s.userHome, '.agents/skills/fewr')), false);
 });
 
 test('install refuses to run beside the legacy version and changes nothing', t => {
@@ -90,7 +91,7 @@ test('Claude gets one dynamic worker, Codex one role per tier from its catalog; 
   assert.match(role('fewr-light.toml'), /model = "gpt-6-luna"\nmodel_reasoning_effort = "low"/);
   const manifest = JSON.parse(fs.readFileSync(path.join(s.home, 'installation.json'), 'utf8'));
   assert.equal(manifest.clients.codex.workers.light, 'gpt-6-luna');
-  assert.equal(manifest.clients.codex.agents.length, 6, 'four roles plus the fewrstats skill files');
+  assert.equal(manifest.clients.codex.agents.length, 6, 'four roles plus the fewr skill files');
   uninstall({ clients: ['claude', 'codex'], home: s.home });
   for (const f of ['.claude/agents/fewr-worker.md', ...roles.map(r => `.codex/agents/${r}`)]) assert.equal(fs.existsSync(path.join(s.userHome, f)), false, f);
   fs.mkdirSync(path.join(s.userHome, '.claude/agents'), { recursive: true });
@@ -117,4 +118,56 @@ test('an agent-file conflict on one client leaves every client untouched', t => 
   assert.throws(() => install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env }), /Keeping your existing file/);
   assert.equal(fs.existsSync(s.claude), false);
   assert.equal(fs.existsSync(path.join(s.userHome, '.claude/agents/fewr-worker.md')), false);
+});
+
+// Simulates the skill files an earlier version installed under skills/fewrstats.
+function oldSkill(s, client, edited) {
+  const dirs = client === 'claude' ? [path.join(s.userHome, '.claude/skills/fewrstats')] : [path.join(s.userHome, '.agents/skills/fewrstats'), path.join(s.userHome, '.agents/skills/fewrstats/agents')];
+  const files = [{ file: path.join(dirs[0], 'SKILL.md'), text: '---\nname: fewrstats\n---\nold\n' }, ...(client === 'codex' ? [{ file: path.join(dirs[1], 'openai.yaml'), text: 'policy:\n  allow_implicit_invocation: false\n' }] : [])];
+  for (const { file, text } of files) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); }
+  const manifestFile = path.join(s.home, 'installation.json');
+  const manifest = fs.existsSync(manifestFile) ? read(manifestFile) : { clients: {} };
+  (manifest.clients[client] ||= { agents: [] }).agents.push(...files.map(f => ({ path: f.file, hash: hash(f.text) })));
+  fs.mkdirSync(s.home, { recursive: true });
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest));
+  if (edited) fs.writeFileSync(files[0].file, files[0].text + 'mine\n');
+  return files.map(f => f.file);
+}
+
+test('a fresh install writes the fewr skill on both clients', t => {
+  const s = setup(t);
+  install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env });
+  assert.match(fs.readFileSync(path.join(s.userHome, '.claude/skills/fewr/SKILL.md'), 'utf8'), /^---\nname: fewr\n/);
+  assert.match(fs.readFileSync(path.join(s.userHome, '.agents/skills/fewr/SKILL.md'), 'utf8'), /^---\nname: fewr\n/);
+  assert.ok(fs.existsSync(path.join(s.userHome, '.agents/skills/fewr/agents/openai.yaml')));
+});
+
+test('upgrading removes the old fewrstats skill and its folders', t => {
+  const s = setup(t);
+  const old = [...oldSkill(s, 'claude'), ...oldSkill(s, 'codex')];
+  install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env });
+  for (const f of old) assert.equal(fs.existsSync(f), false, f);
+  assert.equal(fs.existsSync(path.join(s.userHome, '.claude/skills/fewrstats')), false);
+  assert.equal(fs.existsSync(path.join(s.userHome, '.agents/skills/fewrstats')), false);
+  assert.ok(fs.existsSync(path.join(s.userHome, '.claude/skills/fewr/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(s.userHome, '.agents/skills/fewr/SKILL.md')));
+});
+
+test('upgrading keeps an old fewrstats skill the user edited', t => {
+  const s = setup(t);
+  const [file] = oldSkill(s, 'claude', true);
+  install({ clients: ['claude'], home: s.home, userHome: s.userHome, env: s.env });
+  assert.match(fs.readFileSync(file, 'utf8'), /mine/);
+  assert.ok(fs.existsSync(path.join(s.userHome, '.claude/skills/fewr/SKILL.md')));
+});
+
+test('uninstall removes the whole fewr skill folder but keeps skills/ when it holds other skills', t => {
+  const s = setup(t);
+  install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env });
+  for (const root of ['.claude', '.agents']) { fs.mkdirSync(path.join(s.userHome, root, 'skills/other'), { recursive: true }); fs.writeFileSync(path.join(s.userHome, root, 'skills/other/SKILL.md'), 'x'); }
+  uninstall({ clients: ['claude', 'codex'], home: s.home });
+  for (const root of ['.claude', '.agents']) {
+    assert.equal(fs.existsSync(path.join(s.userHome, root, 'skills/fewr')), false);
+    assert.deepEqual(fs.readdirSync(path.join(s.userHome, root, 'skills')), ['other']);
+  }
 });

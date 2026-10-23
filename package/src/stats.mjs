@@ -1,4 +1,4 @@
-// The /fewrstats report ($fewrstats on Codex): this chat's real raw tokens, cost and active time with
+// The /fewr report ($fewr on Codex): this chat's real raw tokens, cost and active time with
 // Fewr, next to what it would likely have cost without it. A single chat has no measured run without
 // Fewr, so cost is estimated two ways and the lower one shown: (a) every token priced at the lead
 // model's rates, and (b) the lead doing each worker's job itself, its new content then staying in the
@@ -167,17 +167,23 @@ export function formatReport(r) {
   const money = v => v == null ? '—' : r.unit === 'USD' ? `$${v.toFixed(2)}` : `${v.toFixed(1)} credits`;
   const name = r.client === 'codex' ? 'Codex' : 'Claude Code', lead = r.lead ? modelName(r.lead) : 'the lead model';
   const workers = r.workers ? `, ${r.workers} worker${r.workers > 1 ? 's' : ''}` : ', no workers yet';
+  // Markdown collapses blank lines and renderers drop whitespace-only paragraphs; the Braille blank
+  // isn't whitespace, so a line of it renders as an empty paragraph that keeps a visible gap.
+  const SPACER = '\u2800';
   return [
     `**Fewr — this chat** (${name} · ${lead} lead${workers})`,
     ...(r.active ? [] : ['', '> Fewr was not active in this chat (its session brief never arrived), so these numbers show the chat without Fewr. Start a new chat after installing to see its effect.']),
+    '',
+    SPACER,
     '',
     '| | Without Fewr | With Fewr | Change |',
     '| :-- | --: | --: | --: |',
     `| Raw tokens | ${without.raw == null ? '—' : `${int(without.raw)} (est.)`} | ${int(r.with.raw)} | ${pct(r.with.raw, without.raw)} |`,
     `| Cost | ${without.cost == null ? '—' : `${money(without.cost)} (est.)`} | ${money(r.with.cost)} | ${pct(r.with.cost, without.cost)} |`,
     `| Build time | ${without.activeMs == null ? '—' : `${minutes(without.activeMs)} (est.)`} | ${minutes(r.with.activeMs)} | ${pct(r.with.activeMs, without.activeMs)} |`,
-    ...(r.unpriced.length ? ['', `No published price for ${r.unpriced.join(', ')}; counted at the reference model's price.`] : []),
     '',
+    SPACER,
+    ...(r.unpriced.length ? ['', `No published price for ${r.unpriced.join(', ')}; counted at the reference model's price.`] : []),
     '',
     'Follow [@flojousselin](https://x.com/flojousselin) on X for new benchmarks and releases.',
   ].join('\n');

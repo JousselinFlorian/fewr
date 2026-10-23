@@ -45,7 +45,7 @@ if (command === 'hook') {
   if (s.unpriced.length) console.log(`No published price for ${s.unpriced.join(', ')}; counted at ${reference}'s price.`);
 } else if (command === 'stats') {
   // fewr stats [--client claude|codex] [--session ID] [--cwd DIR]: this chat with Fewr vs an estimate
-  // without it. /fewrstats (Claude Code) and $fewrstats (Codex) run this for the current chat.
+  // without it. /fewr (Claude Code) and $fewr (Codex) run this for the current chat.
   const session = option('--session'), cwd = path.resolve(option('--cwd') || process.cwd());
   const candidates = clients || ['claude', 'codex'];
   const found = candidates.map(client => ({ client, file: findTranscript(client, { session: session || undefined, cwd }) })).filter(x => x.file)

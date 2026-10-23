@@ -1,4 +1,4 @@
-// Installs native hooks, the orchestrator's worker agents and the fewrstats skill; no MCP server or
+// Installs native hooks, the orchestrator's worker agents and the fewr skill; no MCP server or
 // policy files.
 // Unrelated settings are preserved, modified files are backed up, and uninstall removes exactly
 // the commands recorded in the manifest.
@@ -52,13 +52,18 @@ function runtimeFiles(home) {
   return { dir: path.join(home, 'runtime', hash(contents.map(([f, t]) => f + '\0' + t).join('\0')).slice(0, 16)), contents };
 }
 
-// /fewrstats (Claude Code skill, with the session id) and $fewrstats (Codex skill, by working directory).
+// /fewr (Claude Code skill, with the session id) and $fewr (Codex skill, by working directory).
 function statsSkillFiles(client, { node, runtime, home, paths, userHome }) {
   const session = client === 'claude' ? " --session '${CLAUDE_SESSION_ID}'" : '';
   const command = `${quote(node)} ${quote(path.join(runtime, 'bin', 'fewr.mjs'))} stats --client ${client}${session} --cwd "$PWD" --home ${quote(home)}`;
-  const text = `---\nname: fewrstats\ndescription: Show this chat's raw tokens, cost and build time with Fewr, next to an estimate without it. Use only when the user asks for Fewr stats.\n${client === 'claude' ? 'disable-model-invocation: true\n' : ''}---\n\nRun this command in the current working directory:\n\n\`\`\`sh\n${command}\n\`\`\`\n\nReturn its output verbatim: the Markdown table and every line under it. Do not estimate, recalculate or add savings figures yourself. If the command fails, report its error.\n`;
-  const dir = client === 'claude' ? path.join(paths.claudeDir, 'skills', 'fewrstats') : path.join(userHome, '.agents', 'skills', 'fewrstats');
+  const text = `---\nname: fewr\ndescription: Show this chat's raw tokens, cost and build time with Fewr, next to an estimate without it. Use only when the user asks for Fewr stats.\n${client === 'claude' ? 'disable-model-invocation: true\n' : ''}---\n\nRun this command in the current working directory:\n\n\`\`\`sh\n${command}\n\`\`\`\n\nReturn its output verbatim: the Markdown table and every line under it. Do not estimate, recalculate or add savings figures yourself. If the command fails, report its error.\n`;
+  const dir = client === 'claude' ? path.join(paths.claudeDir, 'skills', 'fewr') : path.join(userHome, '.agents', 'skills', 'fewr');
   return [{ file: path.join(dir, 'SKILL.md'), text }, ...(client === 'codex' ? [{ file: path.join(dir, 'agents', 'openai.yaml'), text: 'policy:\n  allow_implicit_invocation: false\n' }] : [])];
+}
+
+// Removes the emptied folders of a Fewr skill (current or the former fewrstats), stopping at the first one that is not.
+function removeEmptySkillDirs(file) {
+  for (let dir = path.dirname(file); /[\\/]skills[\\/](fewr|fewrstats)([\\/]|$)/.test(dir); dir = path.dirname(dir)) { try { fs.rmdirSync(dir); } catch { break; } }
 }
 
 function backupAndWrite(home, file, text) {
@@ -105,7 +110,7 @@ export function install({ clients, home, userHome = os.homedir(), env = process.
     // Agents from an earlier install that this version no longer ships are removed if unedited.
     for (const old of manifest.clients[client]?.agents || []) {
       if (files.some(f => f.file === old.path)) continue;
-      try { if (hash(fs.readFileSync(old.path, 'utf8')) === old.hash) { fs.rmSync(old.path); changed.push(old.path); } } catch { /* gone */ }
+      try { if (hash(fs.readFileSync(old.path, 'utf8')) === old.hash) { fs.rmSync(old.path); changed.push(old.path); removeEmptySkillDirs(old.path); } } catch { /* gone */ }
     }
     const entry = { file: paths[client], commands: [command], runtime, workers: models, agents: files.map(f => ({ path: f.file, hash: hash(f.text) })) };
     if (backupAndWrite(home, paths[client], JSON.stringify(config, null, 2) + '\n')) changed.push(paths[client]);
@@ -126,9 +131,7 @@ export function uninstall({ clients, home }) {
       let current = null;
       try { current = fs.readFileSync(agent.path, 'utf8'); } catch { /* already gone */ }
       if (current !== null && hash(current) === agent.hash) {
-        fs.rmSync(agent.path); changed.push(agent.path);
-        // Remove the skill folders we created, once empty.
-        for (let dir = path.dirname(agent.path); /fewrstats/.test(dir); dir = path.dirname(dir)) { try { fs.rmdirSync(dir); } catch { break; } }
+        fs.rmSync(agent.path); changed.push(agent.path); removeEmptySkillDirs(agent.path);
       }
     }
     if (backupAndWrite(home, entry.file, JSON.stringify(config, null, 2) + '\n')) changed.push(entry.file);

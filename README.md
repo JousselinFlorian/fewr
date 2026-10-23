@@ -37,7 +37,7 @@
 2. Start a new chat. Fewr loads when a chat starts, so chats already open keep running without it.
 3. Type this in any chat to see your savings:
    ```text
-   /fewrstats
+   /fewr
    ```
 
 ### Codex
@@ -50,7 +50,7 @@
 3. Start a new chat.
 4. Type this in any chat to see your savings:
    ```text
-   $fewrstats
+   $fewr
    ```
 
 To remove Fewr: `npx fewr uninstall`.
@@ -93,7 +93,7 @@ Fewr saves there. It doesn't turn anything down across the board; it splits the 
 - **Your model keeps the decisions.** Architecture, design, security judgement and review stay on the model and effort you chose.
 - **Each subtask gets the right model.** Lookups, tests and well-defined code go to the cheapest model and effort that does them well, and escalate if they fail.
 - **Nothing in between.** Fewr runs through Claude Code's and Codex's own hooks, with your login, on your machine.
-- **Measured, not promised.** Every benchmark compares the same model at the same effort, with hidden checks grading both builds. `/fewrstats` shows what it saves in your own chats.
+- **Measured, not promised.** Every benchmark compares the same model at the same effort, with hidden checks grading both builds. `/fewr` shows what it saves in your own chats.
 
 ## Follow along
 
