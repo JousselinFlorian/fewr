@@ -171,11 +171,35 @@ function collapseProgress(text) {
   }).join('\n');
 }
 
+// Commands that print file contents (or diffs of them). Their output is the data itself, so it is
+// never rewritten: no repeat-collapsing, no \r handling, no ANSI stripping.
+const FILE_PRINTERS = new Set(['cat','head','tail','sed','nl','bat','less','more','awk','cut','tac','xxd','od','diff','get-content','type']);
+const GIT_PRINTERS = new Set(['show','diff','cat-file']);
+
+export function printsFiles(command) {
+  if (typeof command !== 'string') return false;
+  // Only a pipeline's first stage is its data source; later stages are filters over it.
+  return command.split(/\|\||&&|[;&\n]/).some(element => {
+    const words = element.split('|')[0].trim().replace(/^[({\s]+/, '').split(/\s+/);
+    let i = 0;
+    while (i < words.length && (/^[A-Za-z_]\w*=/.test(words[i]) || ['sudo','command','exec'].includes(words[i]) || (i && words[i-1] === 'sudo' && words[i].startsWith('-')))) i++;
+    const name = path.basename(words[i] || '').toLowerCase();
+    if (name !== 'git') return FILE_PRINTERS.has(name);
+    // Skip git's global options to reach the subcommand.
+    for (i++; i < words.length; i++) {
+      if (['-C','-c','--git-dir','--work-tree'].includes(words[i])) i++;
+      else if (!words[i].startsWith('-')) break;
+    }
+    return GIT_PRINTERS.has(words[i]);
+  });
+}
+
 function collapseRepeats(text) {
   const lines = text.split('\n'), out = [];
   for (let i = 0; i < lines.length;) {
     let end = i + 1;
-    while (end < lines.length && lines[end] === lines[i]) end++;
+    // Blank and whitespace-only lines are never collapsed.
+    while (lines[i].trim() && end < lines.length && lines[end] === lines[i]) end++;
     if (end - i >= 4) out.push(lines[i], `[Fewr: line above repeated ${end - i} times]`);
     else out.push(...lines.slice(i, end));
     i = end;
@@ -186,7 +210,7 @@ function collapseRepeats(text) {
 // Returns the text the model should see. Diagnostics, failures and unknown text are kept;
 // only presentation noise and validated passing test records are removed.
 export function compactText(raw, { command } = {}) {
-  if (typeof raw !== 'string' || raw.length < 1200) return { text: raw, removedBytes: 0 };
+  if (typeof raw !== 'string' || raw.length < 1200 || printsFiles(command)) return { text: raw, removedBytes: 0 };
   let text = raw.replace(ANSI, ''), format = text.length < raw.length ? 'ansi' : undefined;
   const progress = collapseProgress(text);
   if (progress !== text) { text = progress; format = 'progress'; }

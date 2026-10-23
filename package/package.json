@@ -1,11 +1,11 @@
 {
   "name": "@fewr/cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Use less of your Claude Code and Codex subscription at the same quality: your model leads, cheaper models and lower effort handle the legwork.",
   "type": "module",
   "license": "AGPL-3.0-only",
   "author": "Florian Jousselin",
-  "homepage": "https://github.com/JousselinFlorian/fewr/tree/main/package#readme",
+  "homepage": "https://fewr.ai",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JousselinFlorian/fewr.git",
@@ -27,7 +27,7 @@
     "hooks"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   },
   "bin": {
     "fewr": "bin/fewr.mjs"

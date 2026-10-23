@@ -6,10 +6,19 @@ import crypto from 'node:crypto';
 export const stateHome = (env = process.env) => path.resolve(env.FEWR_HOME || path.join(os.homedir(), '.fewr'));
 export const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 
+// Writes through a symlink to its target so the link survives, and keeps an existing file's permission bits.
 export function atomicWrite(file, text) {
+  let mode;
+  try {
+    if (fs.lstatSync(file).isSymbolicLink()) {
+      try { file = fs.realpathSync(file); } catch { file = path.resolve(path.dirname(file), fs.readlinkSync(file)); } // dangling link: create its target
+    }
+    mode = fs.statSync(file).mode & 0o7777;
+  } catch { /* new file */ }
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(temp, text, { mode: 0o600 });
+  fs.writeFileSync(temp, text, { mode: mode ?? 0o600 });
+  if (mode !== undefined) fs.chmodSync(temp, mode);
   fs.renameSync(temp, file);
 }
 

@@ -8,6 +8,7 @@ import { summarize, summarizeFile, claudeCounts } from '../src/usage.mjs';
 import { chatReport, formatReport, findTranscript, modelName } from '../src/stats.mjs';
 import { compactText, compactShellResult } from '../src/compact.mjs';
 import { handleHook } from '../src/hook.mjs';
+import { pruneOld } from '../src/session.mjs';
 import { readEvents } from '../src/store.mjs';
 
 const tmp = t => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'fewr2-')); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };
@@ -239,4 +240,54 @@ test('a worker never runs on a pricier model than the lead', t => {
   assert.deepEqual(spawn({ subagent_type: 'fewr-worker', model: 'opus' }), {});
   assert.deepEqual(handleHook('claude', { hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { model: 'opus' }, session_id: 's' }, dir, {}), {}, 'no transcript: no check');
   assert.match(handleHook('claude', { hook_event_name: 'SessionStart', source: 'startup', session_id: 's' }, dir, {}).hookSpecificOutput.additionalContext, /On haiku, don't delegate\./);
+});
+
+test('file-printing commands are never rewritten; blank lines are never collapsed', () => {
+  const file = 'def f():\n' + '    pass\n'.repeat(30) + '\n'.repeat(8) + '    \n'.repeat(6) + '# end\r\n' + '\x1b[0m\n';
+  for (const command of ['cat main.py', 'sed -n 1,200p x.py', 'FOO=1 sudo -n head -n 500 a | grep x', 'cd src && git --no-pager show HEAD:a.py', 'git -C . diff', 'ls; tail -f x', 'diff a b']) {
+    assert.deepEqual(compactText(file, { command }), { text: file, removedBytes: 0 }, command);
+  }
+  const log = 'building\n' + 'compiling module\n'.repeat(120) + '\n'.repeat(20) + '   \n'.repeat(10) + 'done\n';
+  for (const command of ['make', 'npm run build', 'git status', 'echo cat', undefined]) {
+    const { text } = compactText(log, { command });
+    assert.match(text, /compiling module\n\[Fewr: line above repeated 120 times\]/, String(command));
+    assert.ok(text.includes('\n'.repeat(20) + '   \n'.repeat(10)), 'blank runs intact');
+  }
+  assert.equal(compactText('\n'.repeat(2000)).removedBytes, 0);
+  // Only a pipeline's first stage decides: later stages are filters over its output.
+  for (const command of ['cat a.py | head -40', 'git diff | head', 'ls; tail x.log', 'cd x && sed -n 1,80p f.py']) assert.equal(compactText(log, { command }).removedBytes, 0, command);
+  for (const command of ['npm test 2>&1 | tail -50', 'make 2>&1 | tail -n 100', 'pytest -q | tee out.txt', 'make | sed s/a/b/ | awk 1']) assert.ok(compactText(log, { command }).removedBytes > 0, command);
+});
+
+test('local data directories are private and old saved outputs and sessions are pruned on SessionStart', t => {
+  const home = path.join(tmp(t), '.fewr'), day = 864e5, now = Date.now();
+  const make = (dir, name, age) => { const f = path.join(home, dir, name); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, '{}'); fs.utimesSync(f, (now - age) / 1000, (now - age) / 1000); return f; };
+  const oldOut = make('outputs', 'old.json', 8 * day), newOut = make('outputs', 'new.json', 6 * day);
+  const oldSess = make('sessions', 'old.json', 31 * day), newSess = make('sessions', 'mid.json', 10 * day);
+  fs.mkdirSync(path.join(home, 'outputs', 'subdir')); fs.symlinkSync('/nonexistent', path.join(home, 'outputs', 'dangling'));
+  fs.writeFileSync(path.join(home, 'outputs', 'x'), ''); fs.rmSync(path.join(home, 'outputs', 'x'));
+  assert.doesNotThrow(() => handleHook('claude', { hook_event_name: 'SessionStart', source: 'startup', session_id: 's' }, home, {}));
+  assert.ok(!fs.existsSync(oldOut) && !fs.existsSync(oldSess));
+  assert.ok(fs.existsSync(newOut) && fs.existsSync(newSess) && fs.existsSync(path.join(home, 'outputs', 'subdir')));
+  assert.doesNotThrow(() => pruneOld(path.join(home, 'missing')));
+  assert.doesNotThrow(() => pruneOld(path.join(home, 'outputs', 'new.json')), 'a file where a directory is expected');
+  // Created directories are owner-only, and an existing looser one is tightened.
+  const fresh = path.join(tmp(t), 'h');
+  const input = { hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'make' }, tool_response: { stdout: 'x\n'.repeat(2000), stderr: '' }, session_id: 'p' };
+  fs.mkdirSync(path.join(fresh, 'outputs'), { recursive: true, mode: 0o755 }); fs.chmodSync(path.join(fresh, 'outputs'), 0o755);
+  handleHook('claude', input, fresh, {});
+  handleHook('claude', { hook_event_name: 'UserPromptSubmit', prompt: 'hi', session_id: 'p' }, fresh, {});
+  if (process.platform !== 'win32') for (const d of ['outputs', 'sessions']) assert.equal(fs.statSync(path.join(fresh, d)).mode & 0o777, 0o700, d);
+});
+
+test('Codex SessionStart and Stop produce valid JSON hook output', t => {
+  const home = tmp(t), transcript = path.join(home, 'rollout.jsonl');
+  fs.writeFileSync(transcript, '');
+  const start = handleHook('codex', { hook_event_name: 'SessionStart', source: 'startup', session_id: 'c1' }, home, {});
+  const parsed = JSON.parse(JSON.stringify(start));
+  assert.equal(parsed.hookSpecificOutput.hookEventName, 'SessionStart');
+  assert.equal(typeof parsed.hookSpecificOutput.additionalContext, 'string');
+  const stop = handleHook('codex', { hook_event_name: 'Stop', session_id: 'c1', transcript_path: transcript }, home, {});
+  assert.deepEqual(JSON.parse(JSON.stringify(stop)), {});
+  assert.deepEqual(handleHook('codex', { hook_event_name: 'Stop', session_id: 'c1' }, home, {}), {});
 });

@@ -5,12 +5,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { atomicWrite, hash, readJson } from './store.mjs';
 import { workerModels, agentFiles, agentPath } from './orchestrate.mjs';
 
-const LIBRARY = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const LIBRARY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const quote = value => `'${String(value).replaceAll("'", `'\\''`)}'`;
 const LEGACY = /[/\\]\.shyft[/\\]runtime[/\\]shyft-[0-9a-f]+\.mjs/;
+const CLIENTS = ['claude', 'codex'];
+// A hook command Fewr wrote, recognisable without the manifest (the runtime folder is a 16-hex content hash).
+const fewrCommand = (command, client) => typeof command === 'string' && new RegExp(`[/\\\\]runtime[/\\\\][0-9a-f]{16}[/\\\\]bin[/\\\\]fewr\\.mjs' hook ${client}(\\s|$)`).test(command);
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const checkClients = clients => { for (const client of clients) if (!CLIENTS.includes(client)) throw new Error(`Unknown client "${client}"; use claude, codex or both.`); };
 
 export function clientPaths(home = os.homedir(), env = process.env) {
   const claude = path.resolve(env.CLAUDE_CONFIG_DIR || path.join(home, '.claude'));
@@ -25,22 +31,43 @@ export function hookEvents(client) {
     : { SessionStart: undefined, Stop: undefined };
 }
 
+// Only a missing file counts as empty; any other read error must stop before something is overwritten.
+function readText(file) {
+  try { return fs.readFileSync(file, 'utf8'); } catch (error) {
+    if (error.code === 'ENOENT') return null;
+    throw new Error(`Cannot read ${file} (${error.code}); nothing was changed.`);
+  }
+}
+
+// null when the file does not exist.
 function readConfig(file) {
-  let text;
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return {}; }
+  const text = readText(file);
+  if (text === null) return null;
   let data;
   try { data = JSON.parse(text || '{}'); } catch { throw new Error(`Cannot parse ${file}; nothing was changed.`); }
-  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(`Expected a JSON object in ${file}; nothing was changed.`);
+  if (!isObject(data)) throw new Error(`Expected a JSON object in ${file}; nothing was changed.`);
+  const groupOk = g => isObject(g) && (g.hooks === undefined || (Array.isArray(g.hooks) && g.hooks.every(isObject)));
+  if (data.hooks !== undefined && !(isObject(data.hooks) && Object.values(data.hooks).every(groups => Array.isArray(groups) && groups.every(groupOk)))) throw new Error(`Unexpected hooks format in ${file}; nothing was changed.`);
   return data;
 }
 
-function removeCommands(config, commands) {
+// Removes the commands `match` accepts; a group or event goes only if this emptied it. Returns how many were removed.
+function removeCommands(config, match) {
+  let total = 0;
   for (const [event, groups] of Object.entries(config.hooks || {})) {
-    if (!Array.isArray(groups)) continue;
-    config.hooks[event] = groups.map(g => ({ ...g, hooks: (g.hooks || []).filter(h => !commands.includes(h.command)) })).filter(g => g.hooks.length);
-    if (!config.hooks[event].length) delete config.hooks[event];
+    let removed = 0;
+    const kept = groups.flatMap(g => {
+      const hooks = (g.hooks || []).filter(h => !match(h.command));
+      if (hooks.length === (g.hooks || []).length) return [g];
+      removed += g.hooks.length - hooks.length;
+      return hooks.length ? [{ ...g, hooks }] : [];
+    });
+    if (!removed) continue;
+    total += removed;
+    if (kept.length) config.hooks[event] = kept; else delete config.hooks[event];
   }
-  if (config.hooks && !Object.keys(config.hooks).length) delete config.hooks;
+  if (total && !Object.keys(config.hooks).length) delete config.hooks;
+  return total;
 }
 
 const legacyCommands = config => Object.values(config.hooks || {}).flat().flatMap(g => g?.hooks || []).map(h => h.command).filter(c => typeof c === 'string' && LEGACY.test(c));
@@ -67,8 +94,7 @@ function removeEmptySkillDirs(file) {
 }
 
 function backupAndWrite(home, file, text) {
-  let original = null;
-  try { original = fs.readFileSync(file, 'utf8'); } catch { /* new file */ }
+  const original = readText(file);
   if (original === text) return false;
   if (original !== null) atomicWrite(path.join(home, 'backups', `${new Date().toISOString().replaceAll(':', '-')}-${hash(file).slice(0, 8)}.bak`), original);
   atomicWrite(file, text);
@@ -76,31 +102,32 @@ function backupAndWrite(home, file, text) {
 }
 
 export function install({ clients, home, userHome = os.homedir(), env = process.env, node = process.execPath }) {
+  checkClients(clients);
   const paths = clientPaths(userHome, env), manifestFile = path.join(home, 'installation.json');
   const manifest = readJson(manifestFile, { clients: {} });
   // Validate every target before writing anything.
-  const configs = Object.fromEntries(clients.map(client => [client, readConfig(paths[client])]));
-  const agents = {};
+  const configs = Object.fromEntries(clients.map(client => [client, readConfig(paths[client]) || {}]));
+  const agents = {}, { dir: runtime, contents } = runtimeFiles(home);
   for (const client of clients) {
-    if (legacyCommands(configs[client]).length) throw new Error(`The previous version (Shyft) is installed for ${client}. Uninstall it first (node dist/shyft.mjs uninstall in the old checkout); nothing was changed.`);
+    if (legacyCommands(configs[client]).length) throw new Error(`An older version of Fewr (Shyft) is installed for ${client}. Uninstall it first, then run this again; nothing was changed.`);
     // A worker agent file is ours only if we wrote it; never overwrite a user's file.
     const models = workerModels(client, paths.codexDir), owned = manifest.clients[client]?.agents || [];
-    const runtime = runtimeFiles(home).dir;
     const planned = [...agentFiles(client, models).map(({ name, text }) => ({ file: agentPath(client, client === 'claude' ? paths.claudeDir : paths.codexDir, name), text })),
       ...statsSkillFiles(client, { node, runtime, home, paths, userHome })];
     const files = planned.map(({ file, text }) => {
-      let current = null;
-      try { current = fs.readFileSync(file, 'utf8'); } catch { /* absent */ }
-      if (current !== null && current !== text && !owned.some(o => o.path === file && o.hash === hash(current))) throw new Error(`Keeping your existing file ${file}; nothing was changed.`);
+      const current = readText(file);
+      if (current !== null && current !== text && !owned.some(o => o.path === file && o.hash === hash(current))) throw new Error(`Keeping your existing file ${file}. Rename or delete it, then run the install again.`);
       return { file, text, current };
     });
     agents[client] = { models, files };
   }
-  const { dir: runtime, contents } = runtimeFiles(home), changed = [];
+  const changed = [];
   for (const [f, t] of contents) atomicWrite(path.join(runtime, f), t);
   for (const client of clients) {
     const config = configs[client], command = `${quote(node)} ${quote(path.join(runtime, 'bin', 'fewr.mjs'))} hook ${client} --home ${quote(home)}`;
-    removeCommands(config, manifest.clients[client]?.commands || []);
+    // Our earlier commands go by the manifest or, if it is gone, by their shape, so a reinstall never duplicates them.
+    const recorded = manifest.clients[client]?.commands || [];
+    removeCommands(config, c => recorded.includes(c) || fewrCommand(c, client));
     config.hooks ||= {};
     for (const [event, matcher] of Object.entries(hookEvents(client))) {
       (config.hooks[event] ||= []).push({ ...(matcher ? { matcher } : {}), hooks: [{ type: 'command', command, timeout: 10, ...(client === 'codex' ? { statusMessage: `Fewr: ${event === 'Stop' ? 'record usage' : event}` } : {}) }] });
@@ -120,23 +147,34 @@ export function install({ clients, home, userHome = os.homedir(), env = process.
   return { changed, runtime, notes: clients.includes('codex') ? ['Codex: open /hooks and trust the new Fewr hooks; they stay inactive until reviewed.'] : [] };
 }
 
-export function uninstall({ clients, home }) {
-  const manifestFile = path.join(home, 'installation.json'), manifest = readJson(manifestFile, { clients: {} }), changed = [];
-  for (const client of clients || Object.keys(manifest.clients)) {
-    const entry = manifest.clients[client];
-    if (!entry) continue;
-    const config = readConfig(entry.file);
-    removeCommands(config, entry.commands);
-    for (const agent of entry.agents || []) {
+// Without `clients`: every client that has a manifest entry or a configuration folder. `installed` is false
+// when there was nothing of Fewr's to remove.
+export function uninstall({ clients, home, userHome = os.homedir(), env = process.env }) {
+  const paths = clientPaths(userHome, env), manifestFile = path.join(home, 'installation.json'), manifest = readJson(manifestFile, { clients: {} }), changed = [];
+  if (clients) checkClients(clients);
+  const targets = (clients || CLIENTS.filter(client => manifest.clients[client] || fs.existsSync(paths[`${client}Dir`]))).map(client => {
+    const entry = manifest.clients[client], file = entry?.file || paths[client];
+    return { client, entry, file, config: readConfig(file) };
+  });
+  let installed = false;
+  for (const { client, entry, file, config } of targets) {
+    if (entry) installed = true;
+    if (config) {
+      const recorded = entry?.commands || [];
+      if (removeCommands(config, c => recorded.includes(c) || fewrCommand(c, client))) {
+        installed = true;
+        if (backupAndWrite(home, file, JSON.stringify(config, null, 2) + '\n')) changed.push(file);
+      }
+    }
+    for (const agent of entry?.agents || []) {
       let current = null;
       try { current = fs.readFileSync(agent.path, 'utf8'); } catch { /* already gone */ }
       if (current !== null && hash(current) === agent.hash) {
         fs.rmSync(agent.path); changed.push(agent.path); removeEmptySkillDirs(agent.path);
       }
     }
-    if (backupAndWrite(home, entry.file, JSON.stringify(config, null, 2) + '\n')) changed.push(entry.file);
-    delete manifest.clients[client];
+    if (entry) delete manifest.clients[client];
   }
-  atomicWrite(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
-  return { changed };
+  if (targets.some(t => t.entry)) atomicWrite(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+  return { changed, installed };
 }

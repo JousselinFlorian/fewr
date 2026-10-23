@@ -1,5 +1,6 @@
 // Per-session facts Fewr records from hook events. Used to (a) skip re-sending file content the
 // model already has in its current context and (b) restore exact facts after compaction.
+import fs from 'node:fs';
 import path from 'node:path';
 import { atomicWrite, hash, readJson } from './store.mjs';
 
@@ -8,7 +9,32 @@ const fileFor = (home, client, session) => path.join(home, 'sessions', `${client
 const fresh = () => ({ reads: {}, changed: [], prompts: [], compactions: 0 });
 
 export const loadSession = (home, client, session) => ({ ...fresh(), ...readJson(fileFor(home, client, session), {}) });
-export const saveSession = (home, client, session, state) => atomicWrite(fileFor(home, client, session), JSON.stringify(state));
+// Saved outputs and session records can hold file contents: keep their directories owner-only.
+export function privateDir(dir) {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try { fs.chmodSync(dir, 0o700); } catch { /* not ours to change */ }
+}
+
+export function saveSession(home, client, session, state) {
+  privateDir(path.join(home, 'sessions'));
+  atomicWrite(fileFor(home, client, session), JSON.stringify(state));
+}
+
+const DAY = 864e5;
+
+// Best effort, one readdir per directory; a hook must never break a session.
+export function pruneOld(home, now = Date.now()) {
+  for (const [dir, days] of [['outputs', 7], ['sessions', 30]]) {
+    try {
+      for (const name of fs.readdirSync(path.join(home, dir))) {
+        try {
+          const file = path.join(home, dir, name), stat = fs.lstatSync(file);
+          if (stat.isFile() && stat.mtimeMs < now - days * DAY) fs.unlinkSync(file);
+        } catch { /* odd entry: skip */ }
+      }
+    } catch { /* missing or unreadable directory */ }
+  }
+}
 
 export const readKey = input => JSON.stringify([input?.file_path, input?.offset ?? null, input?.limit ?? null, input?.pages ?? null]);
 

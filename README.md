@@ -25,7 +25,7 @@
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) 22 or later
+- [Node.js](https://nodejs.org) 20 or later, on macOS or Linux
 - Claude Code or Codex, signed in
 
 ### Claude Code
@@ -46,7 +46,7 @@
    ```sh
    npx @fewr/cli
    ```
-2. In Codex, type `/hooks`. Find **Fewr: SessionStart** and **Fewr: record usage**, and trust both. Codex keeps new hooks off until you do.
+2. In Codex, type `/hooks`. Find **Fewr: SessionStart** and **Fewr: record usage**, and trust both. Codex keeps new or changed hooks off until you do, so repeat this after each update.
 3. Start a new chat.
 4. Type this in any chat to see your savings:
    ```text

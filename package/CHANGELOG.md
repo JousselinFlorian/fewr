@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 (2026-10-23)
+
+- Install keeps symlinked settings files as symlinks (dotfile setups) and keeps their permissions.
+- A settings file that exists but can't be read stops the install instead of being overwritten.
+- Install works from a path with spaces or non-ASCII characters.
+- Everything is checked before anything is written: an unknown `--client` or an unexpected `hooks` format changes nothing.
+- Reinstalling after deleting `~/.fewr` no longer duplicates hooks, and uninstall still finds them. Uninstall keeps your own empty hook groups and says so when Fewr isn't installed.
+- Compaction never rewrites file contents (`cat`, `sed`, `git diff` and similar) and never collapses blank lines.
+- Saved outputs are deleted after 7 days and session records after 30, in owner-only folders.
+- Runs on Node.js 20 or later. The README lists what Fewr stores locally, and how to delete it.
+
 ## 0.2.0 (2026-10-23)
 
 First release on npm: `npx @fewr/cli` installs it.

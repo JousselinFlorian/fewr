@@ -12,7 +12,7 @@ Fewr makes your Claude Code or Codex subscription go further. Your model stays i
 npx @fewr/cli
 ```
 
-Requires Node.js 22+ and a signed-in Claude Code or Codex. In Codex, open `/hooks` once and trust the new Fewr hooks.
+Requires Node.js 20+ on macOS or Linux, and a signed-in Claude Code or Codex. In Codex, open `/hooks` and trust the Fewr hooks after each install or update.
 
 ## Results
 
@@ -44,7 +44,7 @@ Cutting tokens alone barely moves usage: most of a session's tokens are context 
   | Design, architecture, security judgement | your model, your effort | your model, your effort |
 
   The lead escalates to its own model only if a worker fails twice.
-- **Smaller context (Claude Code).** Shell output is compacted before it enters the conversation; failures stay intact, and the full output is saved locally. Re-reading an unchanged file returns a short note instead of the whole file again.
+- **Smaller context (Claude Code).** Long shell output, such as builds and test runs, is compacted before it enters the conversation. Failures and file contents stay intact, and the full output is saved locally. Re-reading an unchanged file returns a short note instead of the whole file again.
 
 ## See your savings
 
@@ -75,15 +75,16 @@ $fewr
 From a terminal:
 
 ```sh
-fewr stats [--client claude|codex] [--session ID] [--cwd DIR]   # the same report
-fewr usage claude ~/.claude/projects/<project>/<session>.jsonl  # one session's usage, by token type and model
+npx @fewr/cli stats [--client claude|codex] [--session ID] [--cwd DIR]   # the same report
+npx @fewr/cli usage claude ~/.claude/projects/<project>/<session>.jsonl  # one session's usage, by token type and model
 ```
 
 ## Privacy and safety
 
 - Everything runs on your machine. Fewr has no server, and sends no telemetry or code anywhere.
-- It installs only native hooks, agent definitions and the `fewr` skill. Your other settings are kept, modified files are backed up under `~/.fewr/backups/`, and files you've edited are never overwritten.
+- It installs only native hooks, agent definitions and the `fewr` skill. Your other settings are kept, modified files are backed up under `~/.fewr/backups/`, and files you've edited are never overwritten: if one is in the way, the install stops and says so.
 - It never touches your login or tokens.
+- It keeps a little data in `~/.fewr/`, readable only by you: the full output of compacted commands for 7 days (including anything those commands printed, secrets too), the start of each session's last few prompts and the files it read for 30 days, and a usage log for `/fewr`. Uninstalling leaves this folder and your settings backups in place; `rm -rf ~/.fewr` deletes them.
 
 ## Configure and uninstall
 
@@ -94,11 +95,11 @@ FEWR_DISABLE=orchestrate   # or compaction, dedupe, digest, all
 ```
 
 ```sh
-npx @fewr/cli uninstall                # removes exactly what Fewr installed
+npx @fewr/cli uninstall                # removes the hooks, agents and skill Fewr installed
 npx @fewr/cli install --client codex   # or claude, or both (the default detects what you have)
 ```
 
-If the previous version, Shyft, is installed, uninstall it first; Fewr refuses to install beside it.
+If Shyft, Fewr's earlier name, is installed, uninstall it first; Fewr refuses to install beside it.
 
 ## Follow along
 
@@ -113,7 +114,6 @@ If Fewr saves you usage, a ⭐ on GitHub helps others find it.
 ```sh
 npm test
 ```
-
 
 ## License
 

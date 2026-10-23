@@ -8,7 +8,7 @@ import { compactShellResult } from './compact.mjs';
 import { appendEvent, atomicWrite, enabled, hash, readJson } from './store.mjs';
 import { leadBrief, workerModels, tier, WORKER } from './orchestrate.mjs';
 import { summarizeFile } from './usage.mjs';
-import { loadSession, saveSession, readKey, rememberChange, rememberPrompt, afterCompaction, digest } from './session.mjs';
+import { loadSession, saveSession, readKey, rememberChange, rememberPrompt, afterCompaction, digest, privateDir, pruneOld } from './session.mjs';
 
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
@@ -48,7 +48,7 @@ function compactShell(input, home) {
   if (!result) return {};
   // Archive the original before replacing it, so nothing is ever unrecoverable.
   const file = path.join(home, 'outputs', hash(JSON.stringify(input.tool_response)).slice(0, 32) + '.json');
-  try { atomicWrite(file, JSON.stringify(input.tool_response)); } catch { return {}; }
+  try { privateDir(path.dirname(file)); atomicWrite(file, JSON.stringify(input.tool_response)); } catch { return {}; }
   const value = { ...result.value, stdout: result.value.stdout + `\n[Fewr: original output saved at ${file}]` };
   appendEvent(home, { type: 'compaction', client: 'claude', session: input.session_id, format: result.format, originalBytes: result.originalBytes, removedBytes: result.removedBytes });
   return { hookSpecificOutput: { hookEventName: 'PostToolUse', updatedToolOutput: value } };
@@ -96,6 +96,7 @@ export function handleHook(client, input, home, env = process.env) {
   // Session start: the lead brief (orchestrator mode). After compaction the brief would be lost,
   // so it is restored together with the recorded facts; earlier reads are gone from context.
   if (event === 'SessionStart') {
+    pruneOld(home);
     const parts = [];
     if (enabled('orchestrate', home, env)) {
       const installed = readJson(path.join(home, 'installation.json'), { clients: {} }).clients[client]?.workers;

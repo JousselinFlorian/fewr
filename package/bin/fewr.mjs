@@ -12,6 +12,7 @@ const option = name => { const i = args.indexOf(name); if (i < 0) return undefin
 const home = path.resolve(option('--home') || stateHome());
 const clientArg = option('--client');
 const clients = clientArg === 'both' ? ['claude', 'codex'] : clientArg ? [clientArg] : null;
+if (clientArg && !['claude', 'codex', 'both'].includes(clientArg)) { console.error(`Unknown client "${clientArg}"; use claude, codex or both.`); process.exit(1); }
 // Bare `npx @fewr/cli` installs, as the website shows; `fewr help` lists the commands.
 const command = args[0] || 'install';
 const fmt = n => Math.round(n).toLocaleString('en-US');
@@ -24,15 +25,19 @@ if (command === 'hook') {
   try { out = handleHook(args[1], JSON.parse(raw), home); } catch { out = {}; }
   process.stdout.write(JSON.stringify(out));
 } else if (command === 'install' || command === 'uninstall') {
-  // Without --client: every client whose configuration folder exists (for uninstall, what was installed).
+  // Without --client: every client whose configuration folder exists (for uninstall, also those installed).
   const paths = clientPaths(), installed = Object.keys(readJson(path.join(home, 'installation.json'), { clients: {} }).clients);
-  const chosen = clients || (command === 'uninstall' ? installed : ['claude', 'codex'].filter(client => fs.existsSync(paths[`${client}Dir`])));
+  const present = ['claude', 'codex'].filter(client => fs.existsSync(paths[`${client}Dir`]));
+  const chosen = clients || (command === 'uninstall' ? ['claude', 'codex'].filter(client => installed.includes(client) || present.includes(client)) : present);
   if (command === 'install' && !chosen.length) { console.error('No Claude Code or Codex configuration found; pass --client claude|codex|both.'); process.exit(1); }
   try {
-    const result = command === 'install' ? install({ clients: chosen, home }) : uninstall({ clients, home });
-    console.log(`Fewr ${command}ed for ${chosen.join(', ')}. ${result.changed.length} file(s) changed.`);
-    for (const note of result.notes || []) console.log(note);
-    if (command === 'install') console.log('Fewr is free. Follow @flojousselin on X for new benchmarks and releases: https://x.com/flojousselin');
+    const result = command === 'install' ? install({ clients: chosen, home }) : uninstall({ clients: chosen, home });
+    if (command === 'uninstall' && !result.installed) console.log('Fewr is not installed.');
+    else {
+      console.log(`Fewr ${command}ed for ${chosen.join(', ')}. ${result.changed.length} file(s) changed.`);
+      for (const note of result.notes || []) console.log(note);
+      if (command === 'install') console.log('Fewr is free. Follow @flojousselin on X for new benchmarks and releases: https://x.com/flojousselin');
+    }
   } catch (error) { console.error(error.message); process.exit(1); }
 } else if (command === 'usage') {
   // fewr usage <claude|codex> <transcript.jsonl>: price-weighted breakdown of one session and its workers.
