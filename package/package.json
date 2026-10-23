@@ -1,5 +1,5 @@
 {
-  "name": "fewr",
+  "name": "@fewr/cli",
   "version": "0.2.0",
   "description": "Use less of your Claude Code and Codex subscription at the same quality: your model leads, cheaper models and lower effort handle the legwork.",
   "type": "module",
@@ -40,6 +40,9 @@
     "NOTICE",
     "CHANGELOG.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "prepublishOnly": "npm test"

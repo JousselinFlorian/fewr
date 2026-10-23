@@ -12,7 +12,7 @@ const option = name => { const i = args.indexOf(name); if (i < 0) return undefin
 const home = path.resolve(option('--home') || stateHome());
 const clientArg = option('--client');
 const clients = clientArg === 'both' ? ['claude', 'codex'] : clientArg ? [clientArg] : null;
-// Bare `npx fewr` installs, as the website shows; `fewr help` lists the commands.
+// Bare `npx @fewr/cli` installs, as the website shows; `fewr help` lists the commands.
 const command = args[0] || 'install';
 const fmt = n => Math.round(n).toLocaleString('en-US');
 

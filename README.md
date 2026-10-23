@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://x.com/flojousselin"><img src="https://img.shields.io/badge/follow-%40flojousselin-111111?style=flat-square&logo=x&logoColor=white" alt="Follow @flojousselin on X"></a>
-  <a href="https://www.npmjs.com/package/fewr"><img src="https://img.shields.io/npm/v/fewr?style=flat-square&color=111111&label=npm" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/@fewr/cli"><img src="https://img.shields.io/npm/v/@fewr/cli?style=flat-square&color=111111&label=npm" alt="npm"></a>
   <img src="https://img.shields.io/badge/works%20with-Claude%20Code%20%C2%B7%20Codex-111111?style=flat-square" alt="Works with Claude Code and Codex">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-111111?style=flat-square" alt="AGPL-3.0 license">
 </p>
@@ -32,7 +32,7 @@
 
 1. Run this one command and you're set:
    ```sh
-   npx fewr
+   npx @fewr/cli
    ```
 2. Start a new chat. Fewr loads when a chat starts, so chats already open keep running without it.
 3. Type this in any chat to see your savings:
@@ -44,7 +44,7 @@
 
 1. Run the same command:
    ```sh
-   npx fewr
+   npx @fewr/cli
    ```
 2. In Codex, type `/hooks`. Find **Fewr: SessionStart** and **Fewr: record usage**, and trust both. Codex keeps new hooks off until you do.
 3. Start a new chat.
@@ -53,7 +53,7 @@
    $fewr
    ```
 
-To remove Fewr: `npx fewr uninstall`.
+To remove Fewr: `npx @fewr/cli uninstall`.
 
 ## Benchmark
 

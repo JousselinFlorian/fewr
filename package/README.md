@@ -2,14 +2,14 @@
 
 **Less usage. Faster builds. Same quality.**
 
-[![Follow @flojousselin on X](https://img.shields.io/badge/Follow-%40flojousselin-000000?logo=x&logoColor=white)](https://x.com/flojousselin) [![npm](https://img.shields.io/npm/v/fewr?color=000000)](https://www.npmjs.com/package/fewr) [![AGPL-3.0 license](https://img.shields.io/badge/license-AGPL--3.0-000000)](https://github.com/JousselinFlorian/fewr/blob/main/package/LICENSE)
+[![Follow @flojousselin on X](https://img.shields.io/badge/Follow-%40flojousselin-000000?logo=x&logoColor=white)](https://x.com/flojousselin) [![npm](https://img.shields.io/npm/v/@fewr/cli?color=000000)](https://www.npmjs.com/package/@fewr/cli) [![AGPL-3.0 license](https://img.shields.io/badge/license-AGPL--3.0-000000)](https://github.com/JousselinFlorian/fewr/blob/main/package/LICENSE)
 
 <p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/hero.jpg" width="880" alt="Less usage. Faster builds. Same quality. Claude Code: −43% cost, −50% build time. Codex: −51% cost, −22% build time."></p>
 
 Fewr makes your Claude Code or Codex subscription go further. Your model stays in charge, and the legwork goes to cheaper models at the right effort. It runs locally through each client's own hooks, uses your existing login, and never routes your traffic anywhere.
 
 ```sh
-npx fewr
+npx @fewr/cli
 ```
 
 Requires Node.js 22+ and a signed-in Claude Code or Codex. In Codex, open `/hooks` once and trust the new Fewr hooks.
@@ -94,8 +94,8 @@ FEWR_DISABLE=orchestrate   # or compaction, dedupe, digest, all
 ```
 
 ```sh
-npx fewr uninstall          # removes exactly what Fewr installed
-npx fewr install --client codex   # or claude, or both (the default detects what you have)
+npx @fewr/cli uninstall                # removes exactly what Fewr installed
+npx @fewr/cli install --client codex   # or claude, or both (the default detects what you have)
 ```
 
 If the previous version, Shyft, is installed, uninstall it first; Fewr refuses to install beside it.

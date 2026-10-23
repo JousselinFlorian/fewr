@@ -2,7 +2,7 @@
 
 ## 0.2.0 (2026-10-23)
 
-First release on npm: `npx fewr` installs it.
+First release on npm: `npx @fewr/cli` installs it.
 
 - The stats report now estimates raw tokens and build time without Fewr, not only cost.
 - A worker is never given a model pricier than the lead's.
