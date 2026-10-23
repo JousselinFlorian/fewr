@@ -21,7 +21,7 @@ export function clientPaths(home = os.homedir(), env = process.env) {
 // Hook events each client needs. Mechanisms add events here as they are introduced.
 export function hookEvents(client) {
   return client === 'claude'
-    ? { PostToolUse: '^(Bash|PowerShell|Read|Edit|Write|MultiEdit|NotebookEdit)$', UserPromptSubmit: undefined, SessionStart: undefined, Stop: undefined, SessionEnd: undefined }
+    ? { PreToolUse: '^(Agent|Task)$', PostToolUse: '^(Bash|PowerShell|Read|Edit|Write|MultiEdit|NotebookEdit)$', UserPromptSubmit: undefined, SessionStart: undefined, Stop: undefined, SessionEnd: undefined }
     : { SessionStart: undefined, Stop: undefined };
 }
 
@@ -56,7 +56,7 @@ function runtimeFiles(home) {
 function statsSkillFiles(client, { node, runtime, home, paths, userHome }) {
   const session = client === 'claude' ? " --session '${CLAUDE_SESSION_ID}'" : '';
   const command = `${quote(node)} ${quote(path.join(runtime, 'bin', 'fewr.mjs'))} stats --client ${client}${session} --cwd "$PWD" --home ${quote(home)}`;
-  const text = `---\nname: fewrstats\ndescription: Show this chat's raw tokens, cost and build time with Fewr, next to an estimate without it. Use only when the user asks for Fewr stats.\n${client === 'claude' ? 'disable-model-invocation: true\n' : ''}---\n\nRun this command in the current working directory:\n\n\`\`\`sh\n${command}\n\`\`\`\n\nReturn its output verbatim: the Markdown table and the note under it. Do not estimate, recalculate or add savings figures yourself. If the command fails, report its error.\n`;
+  const text = `---\nname: fewrstats\ndescription: Show this chat's raw tokens, cost and build time with Fewr, next to an estimate without it. Use only when the user asks for Fewr stats.\n${client === 'claude' ? 'disable-model-invocation: true\n' : ''}---\n\nRun this command in the current working directory:\n\n\`\`\`sh\n${command}\n\`\`\`\n\nReturn its output verbatim: the Markdown table and every line under it. Do not estimate, recalculate or add savings figures yourself. If the command fails, report its error.\n`;
   const dir = client === 'claude' ? path.join(paths.claudeDir, 'skills', 'fewrstats') : path.join(userHome, '.agents', 'skills', 'fewrstats');
   return [{ file: path.join(dir, 'SKILL.md'), text }, ...(client === 'codex' ? [{ file: path.join(dir, 'agents', 'openai.yaml'), text: 'policy:\n  allow_implicit_invocation: false\n' }] : [])];
 }

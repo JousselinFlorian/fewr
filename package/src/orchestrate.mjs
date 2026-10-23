@@ -10,6 +10,10 @@ import path from 'node:path';
 
 export const WORKER = 'fewr-worker';
 
+// Claude model tiers by price. A worker never runs on a higher tier than the lead.
+const TIERS = [/haiku/, /sonnet/, /opus/, /fable|mythos/];
+export const tier = (model = '') => { const i = TIERS.findIndex(t => t.test(String(model).toLowerCase())); return i < 0 ? null : i; };
+
 const LEGWORK = 'Does delegated legwork for the lead session: investigation, log and test summaries, mechanical edits, or implementing a spec (code and tests).';
 const DESCRIPTION = `${LEGWORK} The lead sets its model and effort per task.`;
 const PROMPT = 'You do the subtask the lead hands you. Investigation: report only the facts asked for, with file paths and line numbers; make no edits. Implementation: write the code and the tests the spec calls for, run the checks it names, and fix failures until they pass. Do not redesign; if the spec is ambiguous or wrong, make the smallest reasonable choice and report it. If the task needs judgement beyond the spec, stop and say so. Finish with a short report: what you found or changed, checks run with results, open issues.';
@@ -54,7 +58,10 @@ export function leadBrief(client, models) {
   const routes = client === 'claude'
     ? `Delegate to the ${WORKER} subagent, setting its model and effort for each subtask (Agent tool model and effort parameters): ${models.light} for lookups, log or test-output summaries and mechanical edits; ${models.standard} with low effort for small, fully specified changes; ${models.standard} medium for standard logic, tests and fixes; ${models.standard} high for tricky logic (algorithms, subtle bugs, edge cases)`
     : `Delegate by spawning the agent type that fits the subtask, with fork_turns "none" and no model or reasoning_effort, since each type sets its own: ${codexRoles(models).map(r => `${r.name} for ${r.use}`).join('; ')}`;
-  return `Fewr orchestrator mode: you are the lead and make the decisions. Your own turns run at the user's chosen model and effort and are the most expensive in this session, so hand off any subtask a cheaper worker can do equally well. ${routes}; escalate to your own model only if that fails twice. Keep for yourself: architecture; design-heavy work (visual rendering, styling, layout, UX, copy); security judgement (threat analysis, exploitability, severity, and reviewing every security fix before accepting it); and creative direction for media (storyboard, visual style, script). Workers still do the legwork around these: inventories and scans, reproductions and regression tests for issues you specify, fixes you have specified, and asset, rendering or encoding pipelines. If a task is mostly design-heavy, do it without delegating. Give each delegation one coherent spec with acceptance checks, read code yourself only when a decision depends on it, and verify through check results and reports.`;
+  // Workers top out at the standard model, so only a lead on the light model would hand off upwards.
+  // On Claude, the PreToolUse hook also blocks any worker pricier than the lead.
+  const below = `On ${models.light}, don't delegate.`;
+  return `Fewr orchestrator mode: you are the lead and make the decisions. Your own turns run at the user's chosen model and effort and are the most expensive in this session, so hand off any subtask a cheaper worker can do equally well. ${routes}; escalate to your own model only if that fails twice. ${below} Keep for yourself: architecture; design-heavy work (visual rendering, styling, layout, UX, copy); security judgement (threat analysis, exploitability, severity, and reviewing every security fix before accepting it); and creative direction for media (storyboard, visual style, script). Workers still do the legwork around these: inventories and scans, reproductions and regression tests for issues you specify, fixes you have specified, and asset, rendering or encoding pipelines. If a task is mostly design-heavy, do it without delegating. Give each delegation one coherent spec with acceptance checks, read code yourself only when a decision depends on it, and verify through check results and reports.`;
 }
 
 // Same agent for benchmark harnesses that cannot read user-level agent files.

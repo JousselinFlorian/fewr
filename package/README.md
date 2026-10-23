@@ -65,12 +65,12 @@ $fewrstats
 ```
 | | Without Fewr | With Fewr | Change |
 | :-- | --: | --: | --: |
-| Raw tokens | — | 4,070,377 | 8–52% fewer on 5 of 6 benchmark tasks |
+| Raw tokens | — | 4,070,377 | — |
 | Cost | $5.12 (est.) | $3.98 | −22.4% |
-| Build time | — | 22 min | 18–50% faster on 5 of 6 benchmark tasks |
+| Build time | — | 22 min | — |
 ```
 
-"With Fewr" is the chat's real usage, workers included, at published prices. A chat has no measured run without Fewr, so that cost is a conservative estimate: the lower of two models of the same work done by your model alone. In benchmarks, it stayed under the real cost without Fewr on 5 of 6 tasks. Raw tokens and build time have no reliable per-chat estimate, so their change shows the benchmark result.
+"With Fewr" is the chat's real usage, workers included, at published prices. A chat has no measured run without Fewr, so that cost is a conservative estimate: the lower of two models of the same work done by your model alone. In benchmarks, it stayed under the real cost without Fewr on 5 of 6 tasks. Raw tokens and build time have no reliable per-chat estimate without Fewr, so they show this chat's figures only.
 
 From a terminal:
 

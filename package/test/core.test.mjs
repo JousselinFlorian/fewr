@@ -202,10 +202,41 @@ test('fewrstats reports this chat with Fewr and a conservative cost estimate wit
   const modelled = (10_000 * 8 + 1_500 * 20 + 10_000 * 0.2 + 4_000 * 8 + 2_000 * 20 + 6_000 * 1 * 0.2) / 1e6;
   near(r.without.cost, Math.min(repriced, modelled), 'the lower of the two estimates');
   assert.equal(r.with.activeMs, 10 * 60_000);
+  // The worker's 6,000 new tokens, written once and re-read by the one later lead turn.
+  assert.equal(r.without.raw, 21_500 + 6_000 + 6_000);
+  // The lead wrote 1,500 tokens in 10 minutes, so the worker's 2,000 take 13 min 20 s at its pace.
+  assert.equal(r.without.activeMs, 10 * 60_000 + 800_000);
   const text = formatReport(r);
   assert.match(text, /Claude Code · Opus 5\.5 lead, 1 worker/);
   assert.equal(r.active, false); assert.match(text, /Fewr was not active in this chat/);
-  assert.match(text, /\| Cost \| \$0\.\d\d \(est\.\) \| \$0\.\d\d \| −\d/);
-  assert.match(text, /\| Raw tokens \| — \| 67,500 \| 8–52% fewer on 5 of 6 benchmark tasks \|/);
+  assert.match(text, /\| Raw tokens \| — \| 67,500 \| — \|/, 'no estimate when Fewr was not active');
+  assert.match(text, /\| Cost \| — \| \$0\.\d\d \| — \|/);
+  const shown = formatReport({ ...r, active: true });
+  assert.match(shown, /\| Raw tokens \| 33,500 \(est\.\) \| 67,500 \| \+101\.5% \|/);
+  assert.match(shown, /\| Cost \| \$0\.\d\d \(est\.\) \| \$0\.\d\d \| −\d/);
+  assert.match(shown, /\| Build time \| 23 min \(est\.\) \| 10 min \| −57\.1% \|/);
   assert.equal(modelName('gpt-6.1-sol'), 'GPT-6.1 Sol'); assert.equal(modelName('claude-haiku-5-5'), 'Haiku 5.5');
+});
+
+test('a worker never runs on a pricier model than the lead', t => {
+  const dir = tmp(t), transcript = path.join(dir, 'lead.jsonl');
+  const lead = model => fs.writeFileSync(transcript, [
+    JSON.stringify({ type: 'assistant', message: { id: 'a', model: 'claude-opus-5-5', usage: {} } }),
+    JSON.stringify({ type: 'assistant', isSidechain: true, message: { id: 'w', model: 'claude-haiku-5-5', usage: {} } }),
+    JSON.stringify({ type: 'assistant', message: { id: 'b', model, usage: {} } }),
+  ].join('\n') + '\n');
+  const spawn = tool_input => handleHook('claude', { hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input, transcript_path: transcript, session_id: 's' }, dir, {});
+  const denied = out => out.hookSpecificOutput?.permissionDecision === 'deny';
+  lead('claude-sonnet-5-5');
+  assert.ok(denied(spawn({ subagent_type: 'fewr-worker', model: 'opus' })), 'Sonnet lead: no Opus worker');
+  assert.ok(denied(spawn({ subagent_type: 'general-purpose', model: 'fable' })), 'nor Fable, on any agent');
+  assert.deepEqual(spawn({ subagent_type: 'fewr-worker', model: 'sonnet' }), {});
+  assert.deepEqual(spawn({ subagent_type: 'fewr-worker', model: 'haiku' }), {});
+  lead('claude-haiku-5-5');
+  assert.ok(denied(spawn({ subagent_type: 'fewr-worker' })), 'Haiku lead: the default Sonnet worker is pricier');
+  assert.deepEqual(spawn({ subagent_type: 'Explore' }), {}, 'agents without a model are not Fewr\'s choice');
+  lead('claude-fable-5-1');
+  assert.deepEqual(spawn({ subagent_type: 'fewr-worker', model: 'opus' }), {});
+  assert.deepEqual(handleHook('claude', { hook_event_name: 'PreToolUse', tool_name: 'Agent', tool_input: { model: 'opus' }, session_id: 's' }, dir, {}), {}, 'no transcript: no check');
+  assert.match(handleHook('claude', { hook_event_name: 'SessionStart', source: 'startup', session_id: 's' }, dir, {}).hookSpecificOutput.additionalContext, /On haiku, don't delegate\./);
 });

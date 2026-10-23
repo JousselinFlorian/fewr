@@ -25,6 +25,7 @@ test('install adds only hooks, preserves unrelated settings, and is idempotent',
   assert.deepEqual(cfg.permissions, { deny: ['Bash(rm *)'] });
   assert.ok(commands(cfg).includes('echo mine'));
   assert.equal(cfg.hooks.PostToolUse[0].matcher, '^(Bash|PowerShell|Read|Edit|Write|MultiEdit|NotebookEdit)$');
+  assert.equal(cfg.hooks.PreToolUse[0].matcher, '^(Agent|Task)$');
   assert.deepEqual(Object.keys(read(s.codex).hooks).sort(), ['SessionStart', 'Stop']);
   install({ clients: ['claude', 'codex'], home: s.home, userHome: s.userHome, env: s.env });
   assert.equal(fs.readFileSync(s.claude, 'utf8'), first, 'reinstall changes nothing');

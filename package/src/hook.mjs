@@ -2,15 +2,46 @@
 // Design rule: no behavioral rules about how to work. Measured on Claude, injected working rules
 // raised thinking (billed as output) by more than they saved. The only injected text is the short
 // orchestrator brief (who does what) and, after compaction, recorded facts.
+import fs from 'node:fs';
 import path from 'node:path';
 import { compactShellResult } from './compact.mjs';
 import { appendEvent, atomicWrite, enabled, hash, readJson } from './store.mjs';
-import { leadBrief, workerModels } from './orchestrate.mjs';
+import { leadBrief, workerModels, tier, WORKER } from './orchestrate.mjs';
 import { summarizeFile } from './usage.mjs';
 import { loadSession, saveSession, readKey, rememberChange, rememberPrompt, afterCompaction, digest } from './session.mjs';
 
 const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+const AGENT_TOOLS = new Set(['Agent', 'Task']);
+
+// The lead's current model: the model of its latest reply, read from the end of the transcript, so a
+// /model switch mid-chat counts.
+function leadModel(file) {
+  if (typeof file !== 'string' || !path.isAbsolute(file)) return null;
+  try {
+    const fd = fs.openSync(file, 'r'), size = fs.fstatSync(fd).size, length = Math.min(size, 1 << 20), buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, size - length);
+    fs.closeSync(fd);
+    const lines = buffer.toString('utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (!lines[i].includes('"assistant"')) continue;
+      let row;
+      try { row = JSON.parse(lines[i]); } catch { continue; }
+      const model = row.type === 'assistant' && !row.isSidechain ? row.message?.model : null;
+      if (typeof model === 'string' && tier(model) != null) return model;
+    }
+  } catch { /* unreadable transcript: no check */ }
+  return null;
+}
+
+// A worker never runs on a pricier model than the lead; the lead is told why and picks again.
+function guardWorker(input) {
+  const ti = input.tool_input || {};
+  const worker = ti.model || (ti.subagent_type === WORKER ? workerModels('claude').default.model : null);
+  const lead = worker ? leadModel(input.transcript_path) : null;
+  if (!lead || !(tier(worker) > tier(lead))) return {};
+  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: `Fewr: a ${worker} worker costs more than your own model (${lead}). Use a cheaper worker model, or do this yourself.` } };
+}
 
 function compactShell(input, home) {
   const result = compactShellResult(input.tool_response, input.tool_input?.command);
@@ -41,6 +72,8 @@ export function handleHook(client, input, home, env = process.env) {
   if (!['claude', 'codex'].includes(client) || !input || typeof input !== 'object') return {};
   const event = input.hook_event_name, session = input.session_id;
   const tracked = typeof session === 'string' && session.length > 0 && !input.agent_id;
+
+  if (event === 'PreToolUse' && client === 'claude') return AGENT_TOOLS.has(input.tool_name) ? guardWorker(input) : {};
 
   if (event === 'PostToolUse' && client === 'claude') {
     if (SHELL_TOOLS.has(input.tool_name) && enabled('compaction', home, env)) return compactShell(input, home);

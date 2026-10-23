@@ -4,8 +4,9 @@
 // model's rates, and (b) the lead doing each worker's job itself, its new content then staying in the
 // lead's context for every later lead turn (as does tool output Fewr kept out). Both leave out the
 // extra thinking the lead's effort adds. Checked against measured runs without Fewr, the lower
-// estimate stayed under the real cost on 5 of 6 tasks. Raw tokens and build time have no reliable
-// per-chat estimate, so the report shows the benchmark result for them, labelled as such.
+// estimate stayed under the real cost on 5 of 6 tasks. Raw tokens and build time use (b) alone: the
+// worker's new content once plus its re-reads, and the worker's writing at the lead's measured pace,
+// one worker after another. Against the same runs, both stayed under the real value on 7 of 9.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +14,6 @@ import { readJsonl, sessionTranscripts, summarizeTranscripts } from './usage.mjs
 import { cost, price, PRICE_UNIT } from './cost.mjs';
 import { readEvents } from './store.mjs';
 
-const BENCHMARK = { raw: '8–52% fewer on 5 of 6 benchmark tasks', time: '18–50% faster on 5 of 6 benchmark tasks' };
 const IDLE_CAP_MS = 15 * 60_000; // gaps longer than this (the user away) are not build time
 
 function firstRow(file) {
@@ -62,6 +62,26 @@ function leadRequests(client, rows) {
   return out;
 }
 
+const MODEL_ITEMS = new Set(['reasoning', 'function_call', 'custom_tool_call', 'local_shell_call', 'web_search_call']);
+const fromModel = (client, r) => client === 'codex'
+  ? r.type === 'response_item' && (MODEL_ITEMS.has(r.payload?.type) || (r.payload?.type === 'message' && r.payload.role === 'assistant'))
+  : r.type === 'assistant';
+
+// Time the model spent writing (the gap before each row it wrote) and the transcript's first and last row.
+function timing(client, rows) {
+  const sorted = rows.map(r => ({ t: Date.parse(r.timestamp), model: fromModel(client, r) })).filter(r => Number.isFinite(r.t)).sort((a, b) => a.t - b.t);
+  let writing = 0;
+  for (let i = 1; i < sorted.length; i++) if (sorted[i].model) writing += Math.min(sorted[i].t - sorted[i - 1].t, IDLE_CAP_MS);
+  return { writing, start: sorted[0]?.t, end: sorted.at(-1)?.t };
+}
+
+// Total length of possibly overlapping intervals.
+function covered(spans) {
+  let total = 0, end = -Infinity;
+  for (const [a, b] of spans.sort((x, y) => x[0] - y[0])) if (b > end) { total += b - Math.max(a, end); end = b; }
+  return total;
+}
+
 function activeMs(transcripts) {
   const times = transcripts.flatMap(t => t.rows.map(r => Date.parse(r.timestamp)).filter(Number.isFinite)).sort((a, b) => a - b);
   let total = 0;
@@ -80,16 +100,24 @@ export function chatReport(client, file, { home } = {}) {
   for (const counts of Object.values(all.models)) repriced += leadPrice ? cost(counts, client, lead) : 0;
   // (b) The lead's own tokens, plus each worker's new content (what it read fresh and wrote) at the
   // lead's prices, re-read on every later lead turn; the worker's re-reads of its own context drop out.
-  let modelled = 0, rereads = 0;
+  // The same model in raw tokens, and in time: the worker's writing at the lead's pace, its tool time
+  // unchanged, and workers one after another instead of in parallel.
+  let modelled = 0, rereads = 0, workerRaw = 0, workerMs = 0;
   for (const counts of Object.values(main.models)) modelled += leadPrice ? cost(counts, client, lead) : 0;
-  const requests = leadRequests(client, transcripts[0].rows), laterThan = t => requests.filter(r => r.t > t).length;
+  const leadSteps = leadRequests(client, transcripts[0].rows), laterThan = t => leadSteps.filter(r => r.t > t).length;
   const write = leadPrice ? (client === 'codex' ? leadPrice.input : leadPrice.cacheWrite1h) : 0;
+  const leadWriting = timing(client, transcripts[0].rows).writing;
+  const pace = leadWriting > 0 ? Object.values(main.models).reduce((n, c) => n + c.output, 0) / leadWriting : 0;
+  const spans = [];
   for (const worker of transcripts.slice(1)) {
-    const own = summarizeTranscripts(client, [worker]), start = Math.min(...worker.rows.map(r => Date.parse(r.timestamp)).filter(Number.isFinite));
-    if (!Number.isFinite(start) || !leadPrice) continue;
+    const own = summarizeTranscripts(client, [worker]), time = timing(client, worker.rows), start = time.start;
+    if (!Number.isFinite(start)) continue;
     const read = Object.values(own.models).reduce((n, c) => n + c.input + c.cacheWrite5m + c.cacheWrite1h, 0), wrote = Object.values(own.models).reduce((n, c) => n + c.output, 0);
-    modelled += (read * write + wrote * leadPrice.output) / 1e6;
+    if (leadPrice) modelled += (read * write + wrote * leadPrice.output) / 1e6;
     rereads += (read + wrote) * laterThan(start);
+    workerRaw += read + wrote;
+    workerMs += activeMs([worker]) - time.writing + (pace ? wrote / pace : NaN);
+    spans.push([start, time.end]);
   }
   const session = client === 'codex' ? firstRow(file)?.payload?.id : path.basename(file, '.jsonl');
   let keptTokens = 0;
@@ -105,14 +133,18 @@ export function chatReport(client, file, { home } = {}) {
   // a developer message on Codex. Mentions of it elsewhere in the conversation don't count.
   // Before the rename (2026-10-22) the same brief started with "Shyft orchestrator mode".
   const brief = /(Fewr|Shyft) orchestrator mode/;
-  const active = transcripts[0].rows.some(r => client === 'codex'
+  const fewr = transcripts[0].rows.some(r => client === 'codex'
     ? r.type === 'response_item' && r.payload?.role === 'developer' && brief.test(JSON.stringify(r.payload.content || ''))
     : r.type === 'attachment' && r.attachment?.hookEvent === 'SessionStart' && brief.test(JSON.stringify(r.attachment)));
-  const workers = transcripts.length - 1;
+  const workers = transcripts.length - 1, active = activeMs(transcripts), withoutMs = Math.max(0, active - covered(spans)) + workerMs;
   return {
-    client, file, lead, workers, active, keptTokens: Math.round(keptTokens), unit: PRICE_UNIT[client === 'codex' ? 'codex' : 'claude'],
-    with: { raw: all.raw, cost: all.cost, activeMs: activeMs(transcripts) },
-    without: { cost: leadPrice ? Math.min(repriced, modelled) : null },
+    client, file, lead, workers, active: fewr, keptTokens: Math.round(keptTokens), unit: PRICE_UNIT[client === 'codex' ? 'codex' : 'claude'],
+    with: { raw: all.raw, cost: all.cost, activeMs: active },
+    without: {
+      raw: main.raw + workerRaw + keptTokens + rereads,
+      cost: leadPrice ? Math.min(repriced, modelled) : null,
+      activeMs: Number.isFinite(withoutMs) ? withoutMs : null,
+    },
     unpriced: all.unpriced,
   };
 }
@@ -126,10 +158,12 @@ export const modelName = (model = '') => {
 };
 
 const int = n => Math.round(n).toLocaleString('en-US');
-const pct = (now, before) => before ? `${now <= before ? '−' : '+'}${Math.abs(100 * (now / before - 1)).toFixed(1)}%` : '—';
+const pct = (now, before) => before != null && before > 0 ? `${now <= before ? '−' : '+'}${Math.abs(100 * (now / before - 1)).toFixed(1)}%` : '—';
 const minutes = ms => ms < 90_000 ? `${Math.round(ms / 1000)} s` : `${Math.round(ms / 60_000)} min`;
 
 export function formatReport(r) {
+  // Without Fewr's brief, workers are the client's own subagents: there is nothing to compare.
+  const without = r.active ? r.without : {};
   const money = v => v == null ? '—' : r.unit === 'USD' ? `$${v.toFixed(2)}` : `${v.toFixed(1)} credits`;
   const name = r.client === 'codex' ? 'Codex' : 'Claude Code', lead = r.lead ? modelName(r.lead) : 'the lead model';
   const workers = r.workers ? `, ${r.workers} worker${r.workers > 1 ? 's' : ''}` : ', no workers yet';
@@ -139,13 +173,12 @@ export function formatReport(r) {
     '',
     '| | Without Fewr | With Fewr | Change |',
     '| :-- | --: | --: | --: |',
-    `| Raw tokens | — | ${int(r.with.raw)} | ${BENCHMARK.raw} |`,
-    `| Cost | ${money(r.without.cost)} (est.) | ${money(r.with.cost)} | ${r.without.cost == null ? '—' : pct(r.with.cost, r.without.cost)} |`,
-    `| Build time | — | ${minutes(r.with.activeMs)} | ${BENCHMARK.time} |`,
-    '',
-    `Cost without Fewr is an estimate, not a measured run: the lower of this chat's tokens priced at ${lead}'s rates, and ${lead} doing the workers' jobs inside its own context${r.keptTokens ? ` (with the ${int(r.keptTokens)} tokens of tool output Fewr kept out)` : ''}. Neither counts the extra thinking your effort level would add. Prices are published rates (${r.unit === 'USD' ? 'USD' : 'Codex credits'}); your plan meter may weigh usage differently. Raw tokens and build time can't be estimated for one chat, so their change is our benchmark result. Build time is this chat's active time.`,
+    `| Raw tokens | ${without.raw == null ? '—' : `${int(without.raw)} (est.)`} | ${int(r.with.raw)} | ${pct(r.with.raw, without.raw)} |`,
+    `| Cost | ${without.cost == null ? '—' : `${money(without.cost)} (est.)`} | ${money(r.with.cost)} | ${pct(r.with.cost, without.cost)} |`,
+    `| Build time | ${without.activeMs == null ? '—' : `${minutes(without.activeMs)} (est.)`} | ${minutes(r.with.activeMs)} | ${pct(r.with.activeMs, without.activeMs)} |`,
     ...(r.unpriced.length ? ['', `No published price for ${r.unpriced.join(', ')}; counted at the reference model's price.`] : []),
     '',
-    'Fewr is free and open source. Follow [@flojousselin](https://x.com/flojousselin) on X for new benchmarks and releases.',
+    '',
+    'Follow [@flojousselin](https://x.com/flojousselin) on X for new benchmarks and releases.',
   ].join('\n');
 }
