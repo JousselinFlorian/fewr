@@ -28,6 +28,10 @@ Each comparison ran the same task twice from a fresh workspace, with the same mo
 
 On non-coding tasks the savings were smaller: −28% on a security review and −25% on a video. Results vary between runs.
 
+<p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/before-after.jpg" width="880" alt="The same 3D game built by Claude Code with Opus at max effort, without and with Fewr: 6.3M vs 2.7M raw tokens (−56.9%), $6.14 vs $3.36 (−45.3%), 37 vs 18 minutes (−50.1%). Both games play the same."></p>
+
+The same 3D game, same model, same effort: $6.14 → $3.36 (−45%), 6.3M → 2.7M raw tokens (−57%), 37 → 18 minutes (−50%). Both builds pass all 12 hidden checks and play the same.
+
 ## How it works
 
 Cutting tokens alone barely moves usage: most of a session's tokens are context re-read from cache, which costs 5–10% of a fresh token. What costs is which model does the work, so that is where Fewr saves.
@@ -60,17 +64,7 @@ Or this in Codex:
 $fewr
 ```
 
-<p align="center"><img src="https://raw.githubusercontent.com/JousselinFlorian/fewr/main/assets/stats.png" width="880" alt="/fewr: this chat's raw tokens, cost and build time with Fewr, next to an estimate without it."></p>
-
-```
-| | Without Fewr | With Fewr | Change |
-| :-- | --: | --: | --: |
-| Raw tokens | 3,188,785 (est.) | 2,076,370 | −34.9% |
-| Cost | $1.23 (est.) | $1.12 | −8.9% |
-| Build time | 21 min (est.) | 22 min | +2.9% |
-```
-
-"With Fewr" is the chat's real usage, workers included, at published prices. A chat has no measured run without Fewr, so "Without Fewr" is an estimate: your model doing the workers' jobs inside its own context, plus the tool output Fewr kept out of it. Cost is the lower of that and this chat's tokens priced at your model's rates, so it stays conservative; in benchmarks, it stayed under the real cost without Fewr on 5 of 6 tasks. Build time counts the workers' writing at your model's pace, one task after another. None of the estimates count the extra thinking your effort level would add.
+It shows this chat's real usage with Fewr, workers included, at published prices, next to an estimate without it. A chat has no run without Fewr to compare with, so the estimate is deliberately conservative: your model doing the workers' jobs inside its own context, priced at its own rates. It usually shows less than the benchmarks above measured.
 
 From a terminal:
 
