@@ -1,17 +1,45 @@
 {
   "name": "fewr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Use less of your Claude Code and Codex subscription at the same quality: your model leads, cheaper models and lower effort handle the legwork.",
   "type": "module",
   "license": "AGPL-3.0-only",
   "author": "Florian Jousselin",
   "homepage": "https://github.com/JousselinFlorian/fewr/tree/main/package#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/JousselinFlorian/fewr.git", "directory": "package" },
-  "bugs": { "url": "https://github.com/JousselinFlorian/fewr/issues" },
-  "keywords": ["claude-code", "codex", "ai", "llm", "tokens", "usage", "cost", "orchestrator", "subagents", "hooks"],
-  "engines": { "node": ">=22" },
-  "bin": { "fewr": "bin/fewr.mjs" },
-  "files": ["bin", "src", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JousselinFlorian/fewr.git",
+    "directory": "package"
+  },
+  "bugs": {
+    "url": "https://github.com/JousselinFlorian/fewr/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "ai",
+    "llm",
+    "tokens",
+    "usage",
+    "cost",
+    "orchestrator",
+    "subagents",
+    "hooks"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "fewr": "bin/fewr.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "test": "node --test test/*.test.mjs",
     "prepublishOnly": "npm test"
